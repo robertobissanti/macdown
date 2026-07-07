@@ -57,6 +57,38 @@ compliance. The Markdown parser (Hoedown) is untouched.
   both incompatible with current Ruby).
 - README: updated build requirements (macOS SDK 12+, current Xcode) and
   added a "Notes on the WKWebView Preview Engine" section for contributors.
+- Cleared the remaining deprecation warnings from a full build log
+  (`buildIssue_70666.txt`), across our own source (not vendored/Pods code):
+  - `MPDocument.m`: the CVE-2019-12138/12173 executable-type check now uses
+    the `UniformTypeIdentifiers` `UTType` class instead of the deprecated
+    CoreServices `kUTTypeApplication`/`kUTTypeExecutable`/`UTTypeConformsTo`;
+    `NSSavePanel.allowedFileTypes` → `.allowedContentTypes` in the save,
+    HTML-export, and PDF-export panels; `NSFileHandlingPanelOKButton` →
+    `NSModalResponseOK`.
+  - `MPToolbarController.m`: `NSToolbarItem.minSize`/`.maxSize` → Auto
+    Layout width/height constraints on the toolbar item's view.
+  - `MPEditorView.m`: `NSDragPboard` (a pasteboard-name constant, not a drag
+    type) → `NSPasteboardTypeFileURL`.
+  - `MPDocumentSplitView.m`: `colorUsingColorSpaceName:` →
+    `colorUsingColorSpace:`.
+  - `MPGeneralPreferencesViewController.m`: `NSOnState` →
+    `NSControlStateValueOn`.
+  - `MPUtilities.m`: `+[NSKeyedUnarchiver unarchiveObjectWithFile:]` →
+    `+unarchivedObjectOfClasses:fromData:error:` with an explicit allowed-
+    class set.
+  - `macdown-cmd/main.m`: `stringByAddingPercentEscapesUsingEncoding:` →
+    `stringByAddingPercentEncodingWithAllowedCharacters:`; the deprecated
+    `launchAppWithBundleIdentifier:options:additionalEventParamDescriptor:
+    launchIdentifier:` + `NSWorkspaceLaunchDefault` pair →
+    `-openApplicationAtURL:configuration:completionHandler:`.
+  - Several K&R-style C function declarations without `(void)` prototypes
+    across `MPMainController.m`, `MPRenderer.m`, `MPUtilities.m`,
+    `MPDocument.m`, and `macdown-cmd/main.m`.
+- Podfile: added a `post_install` hook forcing every CocoaPods sub-target's
+  `MACOSX_DEPLOYMENT_TARGET` up to 12.0. GBCli, handlebars-objc, hoedown,
+  JJPluralForm, LibYAML, M13OrderedDictionary, MASPreferences, and
+  PAPreferences all still shipped their own, much older deployment targets
+  (as low as 10.6) that Xcode now warns about on every build.
 
 ### Fixed
 
@@ -138,3 +170,16 @@ compliance. The Markdown parser (Hoedown) is untouched.
 - Gatekeeper compliance (notarization, Developer ID signing, hardened
   runtime + entitlements) is not yet done.
 - Not yet cross-platform; this pass is macOS-only.
+- `insertText:` (deprecated, `NSTextInputClient` says it's meant only for
+  the input system) is still used as-is in `NSTextView+Autocomplete.m` and
+  `MPDocument.m`. Apple's replacement, `-insertText:replacementRange:`,
+  isn't a mechanical rename here — needs a review of what each call site is
+  actually trying to do before switching, so it's left alone for now.
+- Three "Run Script build phase will run during every build" warnings
+  (Fetch Prism Resources / Update Build Number / Transpile Styles) are
+  cosmetic (no declared script outputs, so Xcode can't skip them when
+  nothing changed) — not fixed yet.
+- The new Podfile `post_install` hook (bumping pod sub-target deployment
+  targets to 12.0) only takes effect on the next `pod install`/
+  `bundle exec pod install` — it doesn't retroactively touch the
+  already-generated `Pods.xcodeproj`.
