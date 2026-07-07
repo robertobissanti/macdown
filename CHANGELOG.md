@@ -11,6 +11,21 @@ This release is a modernization pass aimed at getting MacDown building and
 running cleanly on current macOS/Xcode, as a first step towards Gatekeeper
 compliance. The Markdown parser (Hoedown) is untouched.
 
+### Security
+
+- Fixed CVE-2019-12138 and CVE-2019-12173 (directory traversal / arbitrary
+  program execution via a crafted link in a previewed document).
+  `-openOrCreateFileForUrl:` used to hand any resolved, reachable local
+  link target straight to `-[NSWorkspace openURL:]`, including `.app`
+  bundles and other executables reached via an absolute `file://` path or
+  `../` traversal — a malicious Markdown file could silently launch an
+  arbitrary local application when its (disguised) link was clicked. Now
+  checks the *resolved* file's UTI and refuses to open anything conforming
+  to `public.application`/`public.executable`. Auto-created link targets
+  (for links pointing at files that don't exist yet) are now also confined
+  to the current document's own folder, closing the other half of
+  CVE-2019-12138 (writing outside the document's directory via `../`).
+
 ### Changed
 
 - Raised `MACOSX_DEPLOYMENT_TARGET` from 10.8 to 12.0 across all targets.
@@ -84,6 +99,25 @@ compliance. The Markdown parser (Hoedown) is untouched.
   (`img { width: 100% !important; }` in the base HTML template), regardless
   of the image's natural size.
 - `.gitignore` entry for the preview sidecar file.
+
+### Infrastructure
+
+- Replaced `.travis.yml` with `.github/workflows/tests.yml` (GitHub
+  Actions). The old Travis config pinned `osx_image: xcode10.1`, several
+  major Xcode/macOS releases behind this project's current
+  `MACOSX_DEPLOYMENT_TARGET`; Travis CI's free macOS build queue for open
+  source projects has also been effectively dead for years, which is why
+  the `continuous-integration/travis-ci` required status check on PRs
+  never completes. Note: the required-checks list in this repo's branch
+  protection settings still needs to be updated by a maintainer/admin to
+  reference the new workflow instead — that's not something fixable from
+  a PR.
+- Verified the app already builds as a universal binary (arm64 + x86_64):
+  no `ARCHS`/`VALID_ARCHS`/`EXCLUDED_ARCHS` overrides exist anywhere in
+  the project, so it inherits Xcode's default `ARCHS_STANDARD`, and
+  `ONLY_ACTIVE_ARCH = YES` is scoped to the Debug configuration only (as
+  it should be) — Release/Archive builds already produce both
+  architectures. No changes were needed here.
 
 ### Removed
 
