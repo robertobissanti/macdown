@@ -141,6 +141,18 @@ compliance. The Markdown parser (Hoedown) is untouched.
 
 ### Fixed
 
+- Crash (`EXC_BAD_ACCESS`) on toolbar formatting actions (reported on
+  Underline, but not specific to it — any action touching `self.editor`
+  was at risk). `MPDocument`'s `editor` IBOutlet was declared
+  `unsafe_unretained`, the one holdout among all of its sibling outlets
+  (`toolbar`, `splitView`, `editorContainer`, `preview`, ...), which are
+  all `weak` — traced via `git blame` to the original 2014 project setup,
+  predating this codebase's adoption of `weak` IBOutlets, never updated
+  since. A raw, non-zeroing pointer means that if the underlying
+  `MPEditorView` is ever deallocated and recreated (window/layout churn),
+  `editor` keeps pointing at freed memory; any later message to it is a
+  dangling-pointer access. Changed to `weak`, matching every other outlet
+  on the class.
 - `Tools/update_build_number.sh`: unquoted `$(pwd -P)` broke the build when
   the checkout path contained a space (pre-existing bug, unrelated to this
   modernization pass).
