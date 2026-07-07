@@ -1516,7 +1516,12 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
     if (location == newlineBefore + 1 && location == newlineAfter)
         [self.editor insertNewline:self];
     else
-        [self.editor insertText:@"\n\n"];
+        // NSMakeRange(NSNotFound, 0) is Apple's documented sentinel for
+        // -insertText:replacementRange: meaning "use the current selection,
+        // or the marked (IME composition) range if there is one" -- the
+        // same behavior the deprecated 1-arg -insertText: had.
+        [self.editor insertText:@"\n\n"
+               replacementRange:NSMakeRange(NSNotFound, 0)];
 }
 
 - (IBAction)setEditorOneQuarter:(id)sender
