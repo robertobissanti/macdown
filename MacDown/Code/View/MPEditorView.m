@@ -48,7 +48,12 @@ NS_INLINE NSDictionary<NSPasteboardReadingOptionKey, id> *MPImageFileReadingOpti
 }
 
 - (void)awakeFromNib {
-    [self registerForDraggedTypes:[NSArray arrayWithObjects: NSDragPboard, nil]];
+    // NSDragPboard is a *pasteboard name* (identifies which pasteboard),
+    // not a drag type/UTI -- registerForDraggedTypes: wants the latter.
+    // It happened to work regardless and is now also deprecated; register
+    // the actual type this view's -draggingEntered:/-performDragOperation:
+    // care about (see MPImageFileReadingOptions() above).
+    [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
     [super awakeFromNib];
 }
 

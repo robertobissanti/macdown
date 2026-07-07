@@ -228,7 +228,13 @@ static CGFloat itemWidth = 37;
         segmentIndex++;
     }
     
-    itemGroup.maxSize = NSMakeSize(itemGroupWidth, 25);
+    // NSToolbarItem[Group].maxSize/minSize are deprecated as of macOS 12:
+    // "let the system measure the item automatically using constraints"
+    // instead of setting an explicit size on the toolbar item itself.
+    segmentedControl.translatesAutoresizingMaskIntoConstraints = NO;
+    [segmentedControl.widthAnchor
+        constraintEqualToConstant:itemGroupWidth].active = YES;
+    [segmentedControl.heightAnchor constraintEqualToConstant:25].active = YES;
     itemGroup.view = segmentedControl;
     
     [self->toolbarItemIdentifierObjectDictionary setObject:itemGroup forKey:itemIdentifier];
