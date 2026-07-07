@@ -184,6 +184,25 @@ compliance. The Markdown parser (Hoedown) is untouched.
   Frames in Xcode would clear it, but hasn't been done yet.
 - A similar row-overlap was also reported in the "General" pane; it hasn't
   been looked at or fixed yet.
+- Preferences → Markdown: Xcode reports 8 "Trailing constraint is missing"
+  warnings across the extension checkbox groups. Traced these by hand:
+  every flagged button's width is already fully determined transitively
+  (tied to a sibling via equal-width + equal-leading, where that sibling
+  does have an explicit trailing constraint), so this looks like the same
+  class of IB false positive as the Rendering pane above — the checker
+  doesn't trace equal-width chains when deciding whether a view's trailing
+  edge is "missing". Not touched, since the layout renders correctly.
+- Preferences → Editor: Xcode reports 4 "Fixed leading and trailing
+  constraints with a center constraint may cause clipping" warnings. At
+  least one is a real, pre-existing issue (not introduced this pass): the
+  font-preview field (`g0N-qr-H8K`) has its leading edge pinned two
+  different ways — once via its own row's label ("Base font:"), once via
+  the theme popup button in the row below, whose position derives from a
+  *different* label ("Theme:"). These only stay consistent if both labels
+  happen to render at the same width, which nothing currently enforces.
+  Needs a fix in Interface Builder with visual verification (adding an
+  equal-width tie between the two labels, most likely) rather than a blind
+  XML edit — left as a known issue for now.
 - Gatekeeper compliance (notarization, Developer ID signing, hardened
   runtime + entitlements) is not yet done.
 - Not yet cross-platform; this pass is macOS-only.
@@ -192,11 +211,3 @@ compliance. The Markdown parser (Hoedown) is untouched.
   `MPDocument.m`. Apple's replacement, `-insertText:replacementRange:`,
   isn't a mechanical rename here — needs a review of what each call site is
   actually trying to do before switching, so it's left alone for now.
-- Three "Run Script build phase will run during every build" warnings
-  (Fetch Prism Resources / Update Build Number / Transpile Styles) are
-  cosmetic (no declared script outputs, so Xcode can't skip them when
-  nothing changed) — not fixed yet.
-- The new Podfile `post_install` hook (bumping pod sub-target deployment
-  targets to 12.0) only takes effect on the next `pod install`/
-  `bundle exec pod install` — it doesn't retroactively touch the
-  already-generated `Pods.xcodeproj`.
