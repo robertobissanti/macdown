@@ -8,6 +8,9 @@
 
 #import "MPDocument.h"
 #import <WebKit/WebKit.h>
+// kUTTypeApplication / kUTTypeExecutable / UTTypeConformsTo, used in
+// -urlIsBlockedExecutable: (see CVE-2019-12138 / CVE-2019-12173 fix below).
+#import <CoreServices/CoreServices.h>
 #import <JJPluralForm/JJPluralForm.h>
 #import <hoedown/html.h>
 #import "hoedown_html_patch.h"
@@ -2052,13 +2055,59 @@ the current file is not saved anywhere yet. Save the \
 current file somewhere to enable this feature.", \
 @"preview navigation error information")
 
+#define BLOCKED_EXECUTABLE_ALERT_INFORMATIVE NSLocalizedString( \
+@"For your safety, MacDown does not open applications or other \
+executables linked from a previewed document. If you trust this file, \
+open it yourself from Finder.", \
+@"preview navigation error information")
+
+
+// CVE-2019-12138 / CVE-2019-12173: MacDown used to hand any resolved local
+// link target straight to -[NSWorkspace openURL:], including .app bundles
+// and other executables reached via an absolute file:// path or "../"
+// traversal in the previewed (possibly untrusted) Markdown source --
+// letting a malicious document silently launch an arbitrary local
+// application when the user clicked a disguised link. This checks the
+// *resolved* file's actual type rather than pattern-matching the URL
+// string, so it isn't foolable by encoding/traversal tricks the way a
+// substring blocklist would be.
+- (BOOL)urlIsBlockedExecutable:(NSURL *)url
+{
+    if (!url.isFileURL)
+        return NO;
+
+    NSString *uti = nil;
+    if (![url getResourceValue:&uti forKey:NSURLTypeIdentifierKey error:NULL]
+            || !uti)
+        return NO;
+
+    return ([uti isEqualToString:(__bridge NSString *)kUTTypeApplication]
+             || UTTypeConformsTo((__bridge CFStringRef)uti,
+                                  kUTTypeApplication)
+             || UTTypeConformsTo((__bridge CFStringRef)uti,
+                                  kUTTypeExecutable));
+}
+
+// CVE-2019-12138: also restrict where a *new* file can be auto-created for
+// a nonexistent link target, so a "../../../etc/whatever"-style target in
+// a previewed document can't write outside the document's own folder.
+- (BOOL)url:(NSURL *)url isWithinDirectory:(NSURL *)directory
+{
+    NSString *targetPath = url.standardizedURL.path;
+    NSString *dirPath = directory.standardizedURL.path;
+    if (!targetPath || !dirPath)
+        return NO;
+    if (![dirPath hasSuffix:@"/"])
+        dirPath = [dirPath stringByAppendingString:@"/"];
+    return [targetPath hasPrefix:dirPath];
+}
 
 - (void)openOrCreateFileForUrl:(NSURL *)url
 {
     // Simply open the file if it is not local, or exists already.
     BOOL file = url.isFileURL;
     BOOL reachable = !file || [url checkResourceIsReachableAndReturnError:NULL];
-    
+
     // If the file is local but doesn't exist, check if a file with
     // the .md extension exists.
     if (file && !reachable && [url.pathExtension isEqualToString:@""])
@@ -2070,9 +2119,21 @@ current file somewhere to enable this feature.", \
             url = markdownURL;
         }
     }
-    
+
     if (reachable)
     {
+        if ([self urlIsBlockedExecutable:url])
+        {
+            NSAlert *alert = [[NSAlert alloc] init];
+            NSString *template = NSLocalizedString(
+                @"Won’t open executable:\n%@",
+                @"preview navigation error message");
+            alert.messageText = [NSString stringWithFormat:template,
+                                 url.path];
+            alert.informativeText = BLOCKED_EXECUTABLE_ALERT_INFORMATIVE;
+            [alert runModal];
+            return;
+        }
         [[NSWorkspace sharedWorkspace] openURL:url];
         return;
     }
@@ -2100,6 +2161,26 @@ current file somewhere to enable this feature.", \
                              url.lastPathComponent];
         alert.informativeText = AUTO_CREATE_FAIL_ALERT_INFORMATIVE;
         [alert runModal];
+        return;
+    }
+
+    // Confine auto-created link targets to the document's own folder, so a
+    // "../"-laden link in a previewed document can't create files outside
+    // it (the other half of CVE-2019-12138).
+    NSURL *documentDirectory = self.fileURL.URLByDeletingLastPathComponent;
+    if (![self url:url isWithinDirectory:documentDirectory])
+    {
+        NSAlert *alert = [[NSAlert alloc] init];
+        NSString *template = NSLocalizedString(
+            @"Can’t create file:\n%@", @"preview navigation error message");
+        alert.messageText = [NSString stringWithFormat:template,
+                             url.lastPathComponent];
+        alert.informativeText = NSLocalizedString(
+            @"The link target is outside the current document’s folder, "
+            @"so MacDown won’t create it automatically.",
+            @"preview navigation error information");
+        [alert runModal];
+        return;
     }
 
     // Try to created the file.
