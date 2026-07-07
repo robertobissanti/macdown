@@ -50,7 +50,7 @@ NS_INLINE void MPOpenBundledFile(NSString *resource, NSString *extension)
      }];
 }
 
-NS_INLINE void treat()
+NS_INLINE void treat(void)
 {
     NSDictionary *info = MPGetDataMap(@"treats");
     NSString *name = info[@"name"];

@@ -8,9 +8,9 @@
 
 #import "MPDocument.h"
 #import <WebKit/WebKit.h>
-// kUTTypeApplication / kUTTypeExecutable / UTTypeConformsTo, used in
-// -urlIsBlockedExecutable: (see CVE-2019-12138 / CVE-2019-12173 fix below).
-#import <CoreServices/CoreServices.h>
+// UTType, used in -urlIsBlockedExecutable: (see CVE-2019-12138 /
+// CVE-2019-12173 fix below).
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <JJPluralForm/JJPluralForm.h>
 #import <hoedown/html.h>
 #import "hoedown_html_patch.h"
@@ -43,7 +43,7 @@ NS_INLINE NSString *MPEditorPreferenceKeyWithValueKey(NSString *key)
     return [NSString stringWithFormat:@"editor%@%@", first, rest];
 }
 
-NS_INLINE NSDictionary *MPEditorKeysToObserve()
+NS_INLINE NSDictionary *MPEditorKeysToObserve(void)
 {
     static NSDictionary *keys = nil;
     static dispatch_once_t token;
@@ -60,7 +60,7 @@ NS_INLINE NSDictionary *MPEditorKeysToObserve()
     return keys;
 }
 
-NS_INLINE NSSet *MPEditorPreferencesToObserve()
+NS_INLINE NSSet *MPEditorPreferencesToObserve(void)
 {
     static NSSet *keys = nil;
     static dispatch_once_t token;
@@ -599,7 +599,19 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
         }
     });
     
-    savePanel.allowedFileTypes = supportedExtensions;
+    // allowedFileTypes takes extension strings; the macOS 12+ replacement,
+    // allowedContentTypes, wants UTType objects instead. Map each extension
+    // through +[UTType typeWithFilenameExtension:], dropping any that don't
+    // resolve to a known type.
+    NSMutableArray<UTType *> *supportedTypes =
+        [NSMutableArray arrayWithCapacity:supportedExtensions.count];
+    for (NSString *extension in supportedExtensions)
+    {
+        UTType *type = [UTType typeWithFilenameExtension:extension];
+        if (type)
+            [supportedTypes addObject:type];
+    }
+    savePanel.allowedContentTypes = supportedTypes;
     savePanel.allowsOtherFileTypes = YES; // Allow all extensions.
     
     return [super prepareSavePanel:savePanel];
@@ -610,8 +622,17 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
     NSPrintInfo *info = [super printInfo];
     if (!info)
         info = [[NSPrintInfo sharedPrintInfo] copy];
+    // NSAutoPagination itself is flagged deprecated (macOS 11), but unlike
+    // the other warnings in this file Apple's compiler note gives no
+    // replacement API/constant to migrate to -- horizontalPagination/
+    // verticalPagination still only accept NSPrintingPaginationMode values,
+    // and NSAutoPagination is still the correct one to request. Silencing
+    // just these two lines rather than guessing at a nonexistent successor.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     info.horizontalPagination = NSAutoPagination;
     info.verticalPagination = NSAutoPagination;
+#pragma clang diagnostic pop
     info.verticallyCentered = NO;
     info.topMargin = 50.0;
     info.leftMargin = 0.0;
@@ -1293,7 +1314,7 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 - (IBAction)exportHtml:(id)sender
 {
     NSSavePanel *panel = [NSSavePanel savePanel];
-    panel.allowedFileTypes = @[@"html"];
+    panel.allowedContentTypes = @[UTTypeHTML];
     if (self.presumedFileName)
         panel.nameFieldStringValue = self.presumedFileName;
 
@@ -1305,7 +1326,7 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 
     NSWindow *w = self.windowForSheet;
     [panel beginSheetModalForWindow:w completionHandler:^(NSInteger result) {
-        if (result != NSFileHandlingPanelOKButton)
+        if (result != NSModalResponseOK)
             return;
         BOOL styles = controller.stylesIncluded;
         BOOL highlighting = controller.highlightingIncluded;
@@ -1319,7 +1340,7 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 - (IBAction)exportPdf:(id)sender
 {
     NSSavePanel *panel = [NSSavePanel savePanel];
-    panel.allowedFileTypes = @[@"pdf"];
+    panel.allowedContentTypes = @[UTTypePDF];
     if (self.presumedFileName)
         panel.nameFieldStringValue = self.presumedFileName;
     
@@ -1329,7 +1350,7 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
         w = [windowControllers[0] window];
 
     [panel beginSheetModalForWindow:w completionHandler:^(NSInteger result) {
-        if (result != NSFileHandlingPanelOKButton)
+        if (result != NSModalResponseOK)
             return;
 
         NSDictionary *settings = @{
@@ -2076,16 +2097,18 @@ open it yourself from Finder.", \
     if (!url.isFileURL)
         return NO;
 
-    NSString *uti = nil;
-    if (![url getResourceValue:&uti forKey:NSURLTypeIdentifierKey error:NULL]
-            || !uti)
+    NSString *typeIdentifier = nil;
+    if (![url getResourceValue:&typeIdentifier forKey:NSURLTypeIdentifierKey
+                          error:NULL]
+            || !typeIdentifier)
         return NO;
 
-    return ([uti isEqualToString:(__bridge NSString *)kUTTypeApplication]
-             || UTTypeConformsTo((__bridge CFStringRef)uti,
-                                  kUTTypeApplication)
-             || UTTypeConformsTo((__bridge CFStringRef)uti,
-                                  kUTTypeExecutable));
+    UTType *type = [UTType typeWithIdentifier:typeIdentifier];
+    if (!type)
+        return NO;
+
+    return ([type conformsToType:UTTypeApplication]
+             || [type conformsToType:UTTypeExecutable]);
 }
 
 // CVE-2019-12138: also restrict where a *new* file can be auto-created for

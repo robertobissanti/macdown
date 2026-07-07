@@ -13,8 +13,13 @@
 
 - (BOOL)isEqualToColor:(NSColor *)color
 {
-    NSColor *rgb1 = [self colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
-    NSColor *rgb2 = [color colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
+    // colorUsingColorSpaceName: is deprecated; colorUsingColorSpace: with an
+    // explicit NSColorSpace is the modern equivalent. genericRGBColorSpace is
+    // the closest analog to the old NSCalibratedRGBColorSpace for this
+    // equality check.
+    NSColorSpace *space = [NSColorSpace genericRGBColorSpace];
+    NSColor *rgb1 = [self colorUsingColorSpace:space];
+    NSColor *rgb2 = [color colorUsingColorSpace:space];
     return rgb1 && rgb2 && [rgb1 isEqual:rgb2];
 }
 
