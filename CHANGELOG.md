@@ -89,6 +89,23 @@ compliance. The Markdown parser (Hoedown) is untouched.
   JJPluralForm, LibYAML, M13OrderedDictionary, MASPreferences, and
   PAPreferences all still shipped their own, much older deployment targets
   (as low as 10.6) that Xcode now warns about on every build.
+- Podfile: extended the `post_install` hook to also rewrite hoedown's own
+  headers (`Pods/hoedown/src/*.h` and the generated `hoedown-umbrella.h`)
+  from quoted sibling includes (`#include "buffer.h"`) to angle-bracketed
+  ones (`#include <hoedown/buffer.h>`). Harmless for a static library, but
+  `use_frameworks!` builds hoedown as an actual Clang module framework,
+  where Xcode flags the quoted form
+  (`CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER`). hoedown is vendored
+  and regenerated on every `pod install`, so this has to be a `post_install`
+  patch rather than a direct edit.
+- `MacDown.xcodeproj/project.pbxproj`: set `alwaysOutOfDate = 1` on the
+  "Update Build Number", "Fetch Prism Resources", and "Transpile Styles"
+  Run Script build phases (equivalent to unchecking "Based on dependency
+  analysis" in Xcode). None of the three declare file outputs Xcode could
+  use to detect staleness — "Update Build Number" in particular can't,
+  since its output depends on git state, not on any input file — so they
+  were always meant to run on every build; this just tells Xcode that
+  explicitly instead of warning about it.
 
 ### Fixed
 
