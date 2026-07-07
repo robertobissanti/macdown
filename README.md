@@ -49,7 +49,8 @@ The following editor themes and CSS files are extracted from [Mou](http://mouapp
 
 If you wish to build MacDown yourself, you will need the following components/tools:
 
-* OS X SDK (10.14 or later)
+* macOS SDK (12.0 or later; this is the current `MACOSX_DEPLOYMENT_TARGET`)
+* A recent Xcode
 * Git
 * [Bundler](http://bundler.io)
 
@@ -61,7 +62,7 @@ If you wish to build MacDown yourself, you will need the following components/to
 >
 > and report back.
 
-An appropriate SDK should be bundled with Xcode 5 or later versions.
+An appropriate SDK should be bundled with your version of Xcode.
 
 ### Environment Setup
 
@@ -78,6 +79,29 @@ Refer to the official guides of Git and CocoaPods if you need more instructions.
 
     git submodule update
     bundle exec pod install
+
+### Notes on the WKWebView Preview Engine
+
+The Markdown preview pane runs on `WKWebView` (the legacy, deprecated `WebView`
+it used to run on has been fully removed). A few things follow from that if
+you're working on the preview/rendering code:
+
+* The rendered preview is written to a hidden sidecar file next to the open
+  document (`.macdown-preview-<uuid>.html`, ignored by `.gitignore`) and
+  loaded via `-loadFileURL:allowingReadAccessToURL:`, rather than loaded
+  in-memory via `-loadHTMLString:baseURL:`. This is what lets the preview
+  read local images/stylesheets from anywhere on disk; WKWebView otherwise
+  restricts `file://` sub-resource loads to the loaded page's own directory.
+* Local stylesheets/scripts (custom user styles, Prism, MathJax's init
+  script) are embedded inline into the generated HTML rather than
+  `<link>`/`<script src>`-referenced, for the same reason.
+* MathJax itself still loads from the CDN (`cdnjs.cloudflare.com`) rather
+  than a bundled copy, since only its small bootstrap file is vendored
+  locally — the fonts/config/extensions it fetches relative to its own
+  script URL at runtime aren't. Math rendering requires network access.
+* Sparkle has been upgraded from 1.x to 2.x (`SPUStandardUpdaterController`).
+  If you're testing auto-update, you'll need your own EdDSA key pair
+  (`Sparkle/bin/generate_keys`) — the old DSA key mechanism is gone.
 
 ### Translation
 

@@ -1,0 +1,106 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [Unreleased] — Toolchain & WKWebView modernization — 2026-07-07
+
+Author: Roberto Bissanti ([@robertobissanti](https://github.com/robertobissanti))
+
+This release is a modernization pass aimed at getting MacDown building and
+running cleanly on current macOS/Xcode, as a first step towards Gatekeeper
+compliance. The Markdown parser (Hoedown) is untouched.
+
+### Changed
+
+- Raised `MACOSX_DEPLOYMENT_TARGET` from 10.8 to 12.0 across all targets.
+- Migrated the preview pane from the legacy, deprecated WebKit `WebView` to
+  `WKWebView`. This touches navigation/policy delegates, JS↔native
+  messaging (`WKScriptMessageHandler` replacing the old `WebScripting`
+  bridge), scroll sync, zoom (`pageZoom` replacing a private API), MathJax
+  completion signaling, printing, and word counting.
+- Preview HTML is now loaded via `-loadFileURL:allowingReadAccessToURL:`
+  from a hidden sidecar file written next to the open document
+  (`.macdown-preview-<uuid>.html`, git-ignored), instead of
+  `-loadHTMLString:baseURL:`. WKWebView restricts `file://` sub-resource
+  loads to the loaded page's own directory, which broke custom user styles
+  and arbitrarily-located local images under the old approach.
+- Local stylesheets/scripts (custom user CSS, Prism, MathJax's init script)
+  are now embedded inline in the generated HTML rather than linked, for the
+  same file-access-restriction reason.
+- Upgraded Sparkle from 1.x to 2.x (`SPUStandardUpdaterController` /
+  `SPUUpdater`, EdDSA signing key instead of DSA, `use_frameworks!` in the
+  Podfile). Auto-update testing needs a fresh EdDSA key pair generated via
+  `Sparkle/bin/generate_keys` on the machine doing the signing.
+- Bumped MASPreferences (1.3 → 1.4) and PAPreferences (0.4 → 0.5).
+- Migrated `Tools/GitHub-style-generator` from `node-sass` (deprecated,
+  native bindings) to `sass` (Dart Sass); updated its `Makefile` flags
+  accordingly (`--include-path` → `--load-path`).
+- Bumped the `cocoapods` gem constraint in `Gemfile`; dropped the dead
+  `travis` gem (Travis CI is defunct for this project).
+- Dropped the stale `Gemfile.lock` (pinned Bundler 1.17.3 / CocoaPods 1.10.1,
+  both incompatible with current Ruby).
+- README: updated build requirements (macOS SDK 12+, current Xcode) and
+  added a "Notes on the WKWebView Preview Engine" section for contributors.
+
+### Fixed
+
+- `Tools/update_build_number.sh`: unquoted `$(pwd -P)` broke the build when
+  the checkout path contained a space (pre-existing bug, unrelated to this
+  modernization pass).
+- MathJax not rendering: the script tag was pointed at the bundled
+  `MathJax.js`, which is only the bootstrap loader — the `config/`, `jax/`,
+  `extensions/`, and `fonts/` subtrees it fetches relative to its own script
+  URL at runtime were never vendored locally. Reverted to loading from the
+  CDN, as it always effectively was even before this migration (a
+  `WebResourceLoadDelegate` used to transparently swap just the bootstrap
+  file's bytes for a local copy; WKWebView has no equivalent API, and the
+  local copy isn't self-sufficient on its own).
+- Print crashing (`EXC_BREAKPOINT` in `-printDocumentWithSettings:...`):
+  `WKWebView`'s `-printOperationWithPrintInfo:` returns an operation whose
+  view has no frame set; it must be sized to the paper explicitly before
+  AppKit's printing machinery runs it.
+- Preferences → Rendering: the whole pane had drifted out of alignment
+  (overlapping rows for "Theme:"/"Accessory:", the syntax-highlighting
+  checkbox, etc.). Root cause for "Graphviz"/"Mermaid" specifically: they
+  used a `fixedFrame` (absolute position, untouched by Auto Layout) while
+  the "Show line numbers" row they're meant to align with is
+  constraint-driven, so any layout drift desynced them; converted to
+  proper constraints. The rest of the pane's spacing was fixed by hand in
+  Interface Builder.
+- Image drag-and-drop into the editor: previously read the entire dropped
+  file into memory and inlined it as
+  `![](data:image/jpeg;base64,<...>)`, mislabeling every file as
+  `image/jpeg` regardless of its real type and bloating the Markdown source
+  with the full file contents on every drop. Now inserts a plain
+  `![](path)` reference, for any image type.
+- Preview images at an absolute path outside the document's own directory
+  (e.g. a file dragged in from `~/Downloads`) failing to load — same root
+  cause and fix as the custom-styles issue above.
+
+### Added
+
+- Preview images now always render at 100% of the preview pane's width
+  (`img { width: 100% !important; }` in the base HTML template), regardless
+  of the image's natural size.
+- `.gitignore` entry for the preview sidecar file.
+
+### Removed
+
+- `DOMNode+Text.{h,m}`, `WebView+WebViewPrivateHeaders.h`,
+  `MPMathJaxListener.{h,m}` — legacy WebView1-only code with no WKWebView
+  equivalent, superseded by the changes above.
+
+### Known Issues
+
+- Preferences → Rendering: Interface Builder still marks several views in
+  this pane `ambiguous`/`misplaced` in the saved xib, even though the pane
+  renders correctly at runtime (verified). This looks like stale IB
+  diagnostic state left over from manual editing rather than a real
+  runtime issue; running Editor → Resolve Auto Layout Issues → Update All
+  Frames in Xcode would clear it, but hasn't been done yet.
+- A similar row-overlap was also reported in the "General" pane; it hasn't
+  been looked at or fixed yet.
+- Gatekeeper compliance (notarization, Developer ID signing, hardened
+  runtime + entitlements) is not yet done.
+- Not yet cross-platform; this pass is macOS-only.
