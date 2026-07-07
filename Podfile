@@ -77,4 +77,23 @@ post_install do |installer|
 
   patch_quoted_framework_includes.call('PAPreferences',
     'Target Support Files/PAPreferences-framework/PAPreferences-framework-umbrella.h')
+
+  # inhibit_all_warnings! above works by attaching a per-file
+  # COMPILER_FLAGS override ("-w -Xanalyzer -analyzer-disable-all-checks")
+  # to every source file CocoaPods knows about at `pod install` time. But
+  # handlebars-objc.yy.m and y.tab.c aren't among them -- they're produced
+  # at *build* time by an Xcode Build Rule that turns handlebars-objc's
+  # .lm/.ym Lex/Yacc grammar files into .m/.c, so there's no file reference
+  # for CocoaPods to attach a per-file override to. Those generated files
+  # fall back to the handlebars-objc target's own OTHER_CFLAGS instead,
+  # which (confirmed by inspecting the generated xcconfig) carries no
+  # warning suppression at all. Add it there explicitly.
+  installer.pods_project.targets.each do |target|
+    next unless target.name == 'handlebars-objc'
+    target.build_configurations.each do |config|
+      cflags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+      next if cflags.include?('-Wno-everything')
+      config.build_settings['OTHER_CFLAGS'] = "#{cflags} -Wno-everything"
+    end
+  end
 end

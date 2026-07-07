@@ -100,13 +100,19 @@ compliance. The Markdown parser (Hoedown) is untouched.
   patch rather than a direct edit. Generalized the hook into a reusable
   `patch_quoted_framework_includes` helper and applied it to
   PAPreferences-framework's umbrella header too (same warning, same fix).
-- Not fixed: two Clang static-analyzer warnings ("Code will never be
-  executed", "Variable 'hb_lval' may be uninitialized") inside
-  handlebars-objc's Bison/Flex-generated parser files
-  (`handlebars-objc.yy.m`, `y.tab.c`). These live in Xcode's DerivedData,
-  regenerated from the pod's own grammar on every clean build — not part
-  of this repo or even of the (gitignored) `Pods/` tree, so there's
-  nothing here to durably patch. Upstream handlebars-objc issue.
+- Fixed two compiler warnings ("Code will never be executed", "Variable
+  'hb_lval' may be uninitialized") inside handlebars-objc's Lex/Yacc-
+  generated parser files (`handlebars-objc.yy.m`, `y.tab.c`). Root cause:
+  `inhibit_all_warnings!` works by attaching a per-file `COMPILER_FLAGS`
+  override (`-w -Xanalyzer -analyzer-disable-all-checks`) to every source
+  file CocoaPods knows about at `pod install` time — but these two files
+  don't exist then. They're produced at *build* time by an Xcode Build
+  Rule that turns handlebars-objc's `.lm`/`.ym` grammar files into `.m`/
+  `.c`, so there's no file reference for CocoaPods to attach a per-file
+  override to; they fall back to the target's own `OTHER_CFLAGS`, which
+  (confirmed by inspecting the generated xcconfig) carried no warning
+  suppression at all. Added `-Wno-everything` to the handlebars-objc
+  target's `OTHER_CFLAGS` via `post_install` to close that gap.
 - `MacDown.xcodeproj/project.pbxproj`: set `alwaysOutOfDate = 1` on the
   "Update Build Number", "Fetch Prism Resources", and "Transpile Styles"
   Run Script build phases (equivalent to unchecking "Based on dependency
