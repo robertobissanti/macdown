@@ -33,3 +33,22 @@ end
 target "macdown-cmd" do
   pod 'GBCli', '~> 1.1'
 end
+
+# Several of the pods above (GBCli, handlebars-objc, hoedown, JJPluralForm,
+# LibYAML, M13OrderedDictionary, MASPreferences, PAPreferences) still ship
+# with their own, much older MACOSX_DEPLOYMENT_TARGET (as low as 10.6),
+# which is below Xcode's currently supported minimum (10.13) and well below
+# this project's own target (12.0, set at the top of this file). Xcode
+# doesn't build those targets against our deployment target automatically --
+# it warns on every build instead. Force every pod sub-target up to ours,
+# the same fix macdown3000 applies to the same dependency set.
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      deployment_target = config.build_settings['MACOSX_DEPLOYMENT_TARGET']
+      if deployment_target && deployment_target.to_f < 12.0
+        config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
+      end
+    end
+  end
+end
