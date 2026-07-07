@@ -97,7 +97,16 @@ compliance. The Markdown parser (Hoedown) is untouched.
   where Xcode flags the quoted form
   (`CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER`). hoedown is vendored
   and regenerated on every `pod install`, so this has to be a `post_install`
-  patch rather than a direct edit.
+  patch rather than a direct edit. Generalized the hook into a reusable
+  `patch_quoted_framework_includes` helper and applied it to
+  PAPreferences-framework's umbrella header too (same warning, same fix).
+- Not fixed: two Clang static-analyzer warnings ("Code will never be
+  executed", "Variable 'hb_lval' may be uninitialized") inside
+  handlebars-objc's Bison/Flex-generated parser files
+  (`handlebars-objc.yy.m`, `y.tab.c`). These live in Xcode's DerivedData,
+  regenerated from the pod's own grammar on every clean build — not part
+  of this repo or even of the (gitignored) `Pods/` tree, so there's
+  nothing here to durably patch. Upstream handlebars-objc issue.
 - `MacDown.xcodeproj/project.pbxproj`: set `alwaysOutOfDate = 1` on the
   "Update Build Number", "Fetch Prism Resources", and "Transpile Styles"
   Run Script build phases (equivalent to unchecking "Based on dependency
