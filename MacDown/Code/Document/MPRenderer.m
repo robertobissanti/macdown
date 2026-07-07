@@ -19,10 +19,21 @@
 #import "MPAsset.h"
 #import "MPPreferences.h"
 
-// Warning: If the version of MathJax is ever updated, please check the status
-// of https://github.com/mathjax/MathJax/issues/548. If the fix has been merged
-// in to MathJax, then the WebResourceLoadDelegate can be removed from MPDocument
-// and MathJax.js can be removed from this project.
+// MathJax.js is loaded from the CDN, not the bundled copy in
+// MacDown/Resources/MathJax/: the bootstrap script resolves all of its own
+// sub-resources (config/, jax/, extensions/, fonts/) relative to wherever
+// the browser thinks *its own* <script src> came from, and only the
+// bootstrap file itself is vendored locally, not those subtrees. Under
+// WebView1, a WebResourceLoadDelegate transparently swapped just the
+// bootstrap file's bytes for the local copy while leaving the visible src
+// (and therefore MathJax's self-computed base path) pointing at the CDN, as
+// a workaround for a hang bug in old MathJax/WebKit combinations
+// (see https://github.com/mathjax/MathJax/issues/548). WKWebView has no
+// equivalent sub-resource request interception API, and the local copy is
+// unusable on its own (it 404s trying to fetch its own config/jax/fonts),
+// so we now just load MathJax.js straight from the CDN, same as it always
+// resolved to at runtime for everything past the bootstrap file anyway.
+// This requires network access when a document contains math.
 static NSString * const kMPMathJaxCDN =
     @"https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js"
     @"?config=TeX-AMS-MML_HTMLorMML";
@@ -422,15 +433,15 @@ NS_INLINE void MPFreeHTMLRenderer(hoedown_renderer *htmlRenderer)
 - (NSArray *)mathjaxScripts
 {
     NSMutableArray *scripts = [NSMutableArray array];
-    NSURL *url = [NSURL URLWithString:kMPMathJaxCDN];
     NSBundle *bundle = [NSBundle mainBundle];
+
     MPEmbeddedScript *script =
         [MPEmbeddedScript assetWithURL:[bundle URLForResource:@"init"
                                                 withExtension:@"js"
                                                  subdirectory:@"MathJax"]
                                andType:kMPMathJaxConfigType];
     [scripts addObject:script];
-    [scripts addObject:[MPScript javaScriptWithURL:url]];
+    [scripts addObject:[MPScript javaScriptWithURL:[NSURL URLWithString:kMPMathJaxCDN]]];
     return scripts;
 }
 
@@ -643,10 +654,23 @@ NS_INLINE void MPFreeHTMLRenderer(hoedown_renderer *htmlRenderer)
 {
     id<MPRendererDelegate> delegate = self.delegate;
 
+    // Embedded (inline <style>/<script>), not full-link (<link href>/
+    // <script src>), for local file:// assets. WKWebView's
+    // -loadHTMLString:baseURL: restricts file:// sub-resource loads to the
+    // baseURL's own directory tree, so a <link> to the user's custom style
+    // in ~/Library/Application Support/MacDown/Styles, or a <script> to a
+    // bundled Prism/mermaid/graphviz asset, silently fails to load there
+    // (neither lives under the document's own directory, which is what
+    // baseURL is set to). Inlining the file contents directly into the HTML
+    // sidesteps the restriction entirely -- this is the same mechanism
+    // -HTMLForExportWithStyles:highlighting: already uses for self-contained
+    // HTML export. MathJax's script is a remote https:// URL, which
+    // MPAsset's embedded-mode falls back to full-link for automatically
+    // (embedding only applies to file:// URLs), so it's unaffected.
     NSString *title = [self.dataSource rendererHTMLTitle:self];
     NSString *html = MPGetHTML(
-        title, self.currentHtml, self.stylesheets, MPAssetFullLink,
-        self.scripts, MPAssetFullLink);
+        title, self.currentHtml, self.stylesheets, MPAssetEmbedded,
+        self.scripts, MPAssetEmbedded);
     [delegate renderer:self didProduceHTMLOutput:html];
 
     self.styleName = [delegate rendererStyleName:self];

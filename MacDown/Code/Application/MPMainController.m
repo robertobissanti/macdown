@@ -102,21 +102,10 @@ NS_INLINE void treat()
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
-    // Using private API [WebCache setDisabled:YES] to disable WebView's cache
-    id webCacheClass = (id)NSClassFromString(@"WebCache");
-    if (webCacheClass) {
-// Ignoring "undeclared selector" warning
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wundeclared-selector"
-        BOOL setDisabledValue = YES;
-        NSMethodSignature *signature = [webCacheClass methodSignatureForSelector:@selector(setDisabled:)];
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-        invocation.selector = @selector(setDisabled:);
-        invocation.target = [webCacheClass class];
-        [invocation setArgument:&setDisabledValue atIndex:2];
-        [invocation invoke];
-#pragma clang diagnostic pop
-    }
+    // The legacy WebView-cache-disabling workaround (private WebCache class,
+    // invoked reflectively) that used to live here is gone along with the
+    // WKWebView migration: WKWebView doesn't use WebKit1's WebCache at all,
+    // so the lookup would always resolve to nil and no-op now anyway.
     [[NSAppleEventManager sharedAppleEventManager]
         setEventHandler:self
             andSelector:@selector(openUrlSchemeAppleEvent:withReplyEvent:)
