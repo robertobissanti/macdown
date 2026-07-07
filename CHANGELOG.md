@@ -141,18 +141,30 @@ compliance. The Markdown parser (Hoedown) is untouched.
 
 ### Fixed
 
-- Crash (`EXC_BAD_ACCESS`) on toolbar formatting actions (reported on
-  Underline, but not specific to it — any action touching `self.editor`
-  was at risk). `MPDocument`'s `editor` IBOutlet was declared
-  `unsafe_unretained`, the one holdout among all of its sibling outlets
-  (`toolbar`, `splitView`, `editorContainer`, `preview`, ...), which are
-  all `weak` — traced via `git blame` to the original 2014 project setup,
-  predating this codebase's adoption of `weak` IBOutlets, never updated
-  since. A raw, non-zeroing pointer means that if the underlying
-  `MPEditorView` is ever deallocated and recreated (window/layout churn),
-  `editor` keeps pointing at freed memory; any later message to it is a
-  dangling-pointer access. Changed to `weak`, matching every other outlet
-  on the class.
+- Crash (`EXC_BAD_ACCESS`) on grouped toolbar formatting actions (reported
+  on Underline; affected all of Strong/Emphasis/Underline, the heading
+  group, and the list group — anything dispatched through a segmented
+  control). Root cause, found from the full backtrace (`objc_retain` /
+  `objc_storeStrong` right at the callee's entry):
+  `MPToolbarController.m`'s `-selectedToolbarItemGroupItem:` resolved the
+  clicked segment's action via `-methodForSelector:` and called the
+  resulting `IMP` through a hand-cast `void (*)(id)` function pointer —
+  one argument. Every Objective-C method actually receives three
+  (`self`, `_cmd`, `sender`); calling it with the wrong signature left
+  `_cmd`/`sender` as whatever garbage happened to be sitting in those
+  registers, and the callee's own `sender` parameter (implicitly
+  `__strong` under ARC) being retained against that garbage pointer is
+  what crashed. Replaced the manual IMP dispatch with
+  `[NSApp sendAction:to:from:]`, the same standard AppKit mechanism
+  already used for the toolbar's non-grouped buttons a few lines away.
+- Along the way, also changed `MPDocument`'s `editor` IBOutlet from
+  `unsafe_unretained` to `weak` — the one holdout among all of its
+  sibling outlets (`toolbar`, `splitView`, `editorContainer`, `preview`,
+  ...), traced via `git blame` to the original 2014 project setup and
+  never updated. Not the cause of the crash above, but the same class of
+  bug (a raw, non-zeroing pointer that dangles instead of nil-ing out if
+  the referenced view is ever deallocated and recreated) and worth
+  closing while in this code.
 - `Tools/update_build_number.sh`: unquoted `$(pwd -P)` broke the build when
   the checkout path contained a space (pre-existing bug, unrelated to this
   modernization pass).

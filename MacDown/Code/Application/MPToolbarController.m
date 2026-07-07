@@ -112,13 +112,19 @@ static CGFloat itemWidth = 37;
     
     NSToolbarItemGroup *selectedGroup = self->toolbarItemIdentifierObjectDictionary[sender.identifier];
     NSToolbarItem *selectedItem = selectedGroup.subitems[selectedIndex];
-    
-    // Invoke the toolbar item's action
-    // Must convert to IMP to let the compiler know about the method definition
-    MPDocument *document = self.document;
-    IMP imp = [document methodForSelector:selectedItem.action];
-    void (*impFunc)(id) = (void *)imp;
-    impFunc(document);
+
+    // Dispatch through the standard AppKit action mechanism rather than
+    // resolving and calling the IMP by hand: the previous code cast the
+    // IMP to a 1-argument function pointer (id)->void, but every
+    // Objective-C method actually receives 3 arguments (self, _cmd,
+    // sender). Calling it with the wrong signature left _cmd/sender as
+    // whatever garbage happened to be in those registers/stack slots; if
+    // the callee's own `sender` parameter (implicitly __strong under ARC)
+    // then got retained, that retain call could receive a garbage pointer
+    // and crash with EXC_BAD_ACCESS -- which is exactly what was
+    // happening here (reported on Underline, but any of these actions
+    // could have triggered it).
+    [NSApp sendAction:selectedItem.action to:self.document from:selectedItem];
 }
 
 
