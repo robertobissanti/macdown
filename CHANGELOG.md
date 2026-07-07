@@ -115,6 +115,23 @@ compliance. The Markdown parser (Hoedown) is untouched.
   since its output depends on git state, not on any input file — so they
   were always meant to run on every build; this just tells Xcode that
   explicitly instead of warning about it.
+- `Dependency/peg-markdown-highlight/pmh_parser_head.c`: fixed a missing
+  `(void)` prototype and rewrote two "assign via a comma operator inside a
+  ternary" idioms as plain `if`/`else` (same behavior, no more "possible
+  misuse of comma operator" warning). Note: the fixes had to go in
+  `pmh_parser_head.c`, not the generated (and gitignored)
+  `pmh_parser.c` — the Makefile combines `pmh_parser_head.c` +
+  `pmh_parser_core.c` + `pmh_parser_foot.c` into `pmh_parser.c` on every
+  build, so editing the generated file directly would've been overwritten.
+- `Dependency/peg-markdown-highlight/pmh_styleparser.c`: five more missing
+  `(void)` prototypes.
+- `insertText:` (deprecated since macOS 10.11): converted the last 6 call
+  sites (5 in `NSTextView+Autocomplete.m`, 1 in `MPDocument.m`) to
+  `-insertText:replacementRange:`, passing `NSMakeRange(NSNotFound, 0)` —
+  Apple's documented sentinel for "use the current selection or marked
+  (IME composition) range", matching the old method's behavior exactly.
+  Every other call site in both files already used the 2-arg form; these
+  were the last stragglers.
 
 ### Fixed
 
@@ -215,8 +232,3 @@ compliance. The Markdown parser (Hoedown) is untouched.
 - Gatekeeper compliance (notarization, Developer ID signing, hardened
   runtime + entitlements) is not yet done.
 - Not yet cross-platform; this pass is macOS-only.
-- `insertText:` (deprecated, `NSTextInputClient` says it's meant only for
-  the input system) is still used as-is in `NSTextView+Autocomplete.m` and
-  `MPDocument.m`. Apple's replacement, `-insertText:replacementRange:`,
-  isn't a mechanical rename here — needs a review of what each call site is
-  actually trying to do before switching, so it's left alone for now.
