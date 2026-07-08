@@ -141,6 +141,13 @@ compliance. The Markdown parser (Hoedown) is untouched.
 
 ### Fixed
 
+- `MPTerminalPreferencesViewController.xib`: removed two stale outlet
+  connections (`location`, `supportText`) left over from a property
+  rename to `locationTextField`/`supportTextField` that was never cleaned
+  up in the xib. Harmless (both pointed at the same views as the correctly
+  named outlets that are still wired), but logged a "Failed to connect
+  outlet ... missing setter or instance variable" warning on every nib
+  load.
 - Crash (`EXC_BAD_ACCESS`) on grouped toolbar formatting actions (reported
   on Underline; affected all of Strong/Emphasis/Underline, the heading
   group, and the list group — anything dispatched through a segmented
