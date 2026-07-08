@@ -157,6 +157,13 @@ compliance. The Markdown parser (Hoedown) is untouched.
   strong, well-reasoned diagnosis rather than a confirmed fix (couldn't
   profile it directly), but it's a legitimate modernization regardless —
   the old API is exactly the kind of thing this pass is meant to replace.
+  Follow-up: `self.task.terminationHandler = ^{ ...self... }` is a genuine
+  structural retain cycle (`self` → `_task` → `terminationHandler` →
+  block → `self`), correctly flagged by the compiler. It's deliberate —
+  nothing else keeps the controller alive between `-runWithCompletionHandler:`
+  returning and the task exiting — so the cycle is broken explicitly as
+  the first thing the block does (`task.terminationHandler = nil;`),
+  wrapped in a narrowly-scoped `-Warc-retain-cycles` suppression.
 - `MPTerminalPreferencesViewController.xib`: removed two stale outlet
   connections (`location`, `supportText`) left over from a property
   rename to `locationTextField`/`supportTextField` that was never cleaned

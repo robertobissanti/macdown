@@ -55,14 +55,21 @@
     // to fight with, and we explicitly hop back to the main queue
     // ourselves before touching the completion handler (callers update
     // KVO-observed/bound UI properties from it).
-    // Deliberately capture self strongly (not weak): MPDetectHomebrewPrefix
-    // WithCompletionhandler() below creates this controller as a local
-    // variable with no other owner, so this is what keeps it alive for the
-    // task's duration. NSTask releases its terminationHandler after
-    // invoking it once, so this isn't a lasting retain cycle.
     NSFileHandle *stdoutReadHandle =
         ((NSPipe *)self.task.standardOutput).fileHandleForReading;
+
+    // self.task.terminationHandler = ^{ ...self... } is a genuine
+    // structural retain cycle (self -> _task -> terminationHandler ->
+    // block -> self), which the compiler correctly flags. It's
+    // deliberate: MPDetectHomebrewPrefixWithCompletionhandler() below
+    // only holds this controller in a local variable, so capturing self
+    // strongly is what keeps it alive long enough to report back once the
+    // task exits. The cycle is broken explicitly as the first thing the
+    // block does, so it never outlives a single invocation.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-retain-cycles"
     self.task.terminationHandler = ^(NSTask *task) {
+        task.terminationHandler = nil;   // Break the cycle immediately.
         NSData *outData = [stdoutReadHandle readDataToEndOfFile];
         NSString *output = [[NSString alloc] initWithData:outData
                                                    encoding:NSUTF8StringEncoding];
@@ -71,6 +78,7 @@
                 self.completionHandler(output);
         });
     };
+#pragma clang diagnostic pop
 
     @try
     {
