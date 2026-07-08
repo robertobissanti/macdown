@@ -141,6 +141,22 @@ compliance. The Markdown parser (Hoedown) is untouched.
 
 ### Fixed
 
+- "Hang Risk" (Thread Performance Checker priority-inversion warning) when
+  switching Preferences panes: the main thread (user-interactive QoS) was
+  observed waiting on a lock inside MASPreferences'
+  `-setSelectedViewController:` while a lower-QoS thread held it. The
+  strongest candidate found in our own code: `MPHomebrewSubprocessController`
+  (used by the Terminal pane's `brew --prefix` detection, kicked off from
+  `-viewWillAppear`) used the pre-GCD
+  `-[NSFileHandle readToEndOfFileInBackgroundAndNotify]` +
+  `NSNotificationCenter` pattern, whose background read and notification
+  delivery run at a QoS the app doesn't control — a classic setup for
+  exactly this kind of inversion if the user switches panes while it's
+  mid-flight. Rewrote it around `NSTask.terminationHandler`, explicitly
+  hopping back to the main queue for the completion callback. Noted as a
+  strong, well-reasoned diagnosis rather than a confirmed fix (couldn't
+  profile it directly), but it's a legitimate modernization regardless —
+  the old API is exactly the kind of thing this pass is meant to replace.
 - `MPTerminalPreferencesViewController.xib`: removed two stale outlet
   connections (`location`, `supportText`) left over from a property
   rename to `locationTextField`/`supportTextField` that was never cleaned
