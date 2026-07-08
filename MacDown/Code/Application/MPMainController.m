@@ -5,6 +5,8 @@
 //  Created by Tzu-ping Chung  on 7/06/2014.
 //  Copyright (c) 2014 Tzu-ping Chung . All rights reserved.
 //
+//  Portions Copyright (c) 2026 Roberto Bissanti.
+//
 
 #import "MPMainController.h"
 #import <MASPreferences/MASPreferencesWindowController.h>

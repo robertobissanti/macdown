@@ -6,6 +6,8 @@
  * 
  * Code to be inserted into the beginning of the parser code generated
  * from the PEG grammar.
+ *
+ * Portions Copyright 2026 Roberto Bissanti.
  */
 
 #include "pmh_parser.h"

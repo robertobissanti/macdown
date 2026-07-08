@@ -5,6 +5,8 @@
 //  Created by Niklas Berglund on 2017-02-12.
 //  Copyright © 2017 Tzu-ping Chung . All rights reserved.
 //
+//  Portions Copyright (c) 2026 Roberto Bissanti.
+//
 
 #import "MPToolbarController.h"
 

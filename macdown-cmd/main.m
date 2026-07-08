@@ -5,6 +5,8 @@
 //  Created by Esben Sorig on 30/06/2014.
 //  Copyright (c) 2014 Tzu-ping Chung . All rights reserved.
 //
+//  Portions Copyright (c) 2026 Roberto Bissanti.
+//
 
 #import <sys/time.h>
 #import <AppKit/AppKit.h>

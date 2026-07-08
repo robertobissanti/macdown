@@ -96,4 +96,28 @@ post_install do |installer|
       config.build_settings['OTHER_CFLAGS'] = "#{cflags} -Wno-everything"
     end
   end
+
+  # MASPreferencesWindowController's -setSelectedViewController: (called
+  # whenever the user clicks a different Preferences toolbar tab) resizes
+  # the window with `animate:[self.window isVisible]`, i.e. animated
+  # whenever the window is on screen -- which is every real-world case.
+  # NSWindow frame animation is handed off to Core Animation/WindowServer,
+  # which does its compositing on its own background-QoS thread; the main
+  # thread (User-interactive, mid toolbar-click) then synchronously commits
+  # the subsequent setContentView:/recalculateKeyViewLoop calls and blocks
+  # on that thread via an internal NSConditionLock. That's the exact
+  # "Hang Risk" priority-inversion Xcode's Thread Performance Checker flags
+  # at MASPreferencesWindowController.m:222/311 -- nothing in MacDown's own
+  # code appears anywhere in that backtrace. Forcing the resize to be
+  # unanimated removes the CA/WindowServer handoff that creates the
+  # inversion in the first place.
+  masprefs_controller_path = File.join(
+    installer.sandbox.root, 'MASPreferences/Framework/MASPreferencesWindowController.m')
+  if File.exist?(masprefs_controller_path)
+    contents = File.read(masprefs_controller_path)
+    patched = contents.sub(
+      'setFrame:newFrame display:YES animate:[self.window isVisible]]',
+      'setFrame:newFrame display:YES animate:NO]  /* patched: avoid Hang Risk, see Podfile */')
+    File.write(masprefs_controller_path, patched) if patched != contents
+  end
 end

@@ -5,6 +5,8 @@
 //  Created by Tzu-ping Chung on 13/12.
 //  Copyright (c) 2014 Tzu-ping Chung . All rights reserved.
 //
+//  Portions Copyright (c) 2026 Roberto Bissanti.
+//
 
 #import "MPDocumentSplitView.h"
 

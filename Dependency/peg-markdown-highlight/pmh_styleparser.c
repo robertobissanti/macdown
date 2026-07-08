@@ -3,8 +3,10 @@
  * Licensed under the GPL2+ and MIT licenses (see LICENSE for more info).
  * 
  * styleparser.c
- * 
+ *
  * Parser for custom syntax highlighting stylesheets.
+ *
+ * Portions Copyright 2026 Roberto Bissanti.
  */
 
 #include <stdio.h>

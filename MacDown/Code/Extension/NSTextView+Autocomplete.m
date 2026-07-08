@@ -5,6 +5,8 @@
 //  Created by Tzu-ping Chung  on 11/06/2014.
 //  Copyright (c) 2014 Tzu-ping Chung . All rights reserved.
 //
+//  Portions Copyright (c) 2026 Roberto Bissanti.
+//
 
 #import "NSTextView+Autocomplete.h"
 #import "NSString+Lookup.h"
